@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Transport Tracker</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+
+<style>
+:root {
+    --primary: #2563eb;
+    --bg: #f8fafc;
+    --text: #334155;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background: linear-gradient(120deg, #e0f2fe, #f8fafc);
+}
+
+nav {
+    display: flex;
+    justify-content: space-between;
+    padding: 18px 50px;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+nav h1 {
+    color: var(--primary);
+    font-size: 20px;
+}
+
+.hero {
+    height: calc(100vh - 70px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.card {
+    background: white;
+    padding: 35px;
+    border-radius: 12px;
+    width: 350px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.card h2 {
+    margin-bottom: 10px;
+}
+
+.card p {
+    font-size: 14px;
+    color: #64748b;
+    margin-bottom: 20px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #cbd5f5;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--primary);
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+#mapSection {
+    display: none;
+    height: calc(100vh - 70px);
+    position: relative;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+}
+
+/* ✅ Back Button */
+#backBtn {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    width: auto;
+    padding: 10px 15px;
+    background: white;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+    border-radius: 8px;
+}
+
+#error {
+    color: red;
+    font-size: 13px;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<nav>
+    <h1>🚌 Smart Transport</h1>
+</nav>
+
+<div class="hero" id="homeSection">
+    <div class="card">
+        <h2>Track Your Bus</h2>
+        <p>Enter your bus number to view live location</p>
+
+        <input type="text" id="busNumber" placeholder="Enter Bus Number">
+        <button onclick="trackBus()">Track Bus</button>
+
+        <div id="error"></div>
+    </div>
+</div>
+
+<!-- ✅ Map Section with Back Button -->
+<div id="mapSection">
+    <button id="backBtn" onclick="goBack()">⬅ Back</button>
+    <div id="map"></div>
+</div>
+
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+
+let map, marker;
+
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyCWF2kltifXDALMujuJLk1EnlBJQi-JK0M",
+  authDomain: "smarttransport-858d4.firebaseapp.com",
+  databaseURL: "https://smarttransport-858d4-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "smarttransport-858d4",
+  storageBucket: "smarttransport-858d4.firebasestorage.app",
+  messagingSenderId: "382430830939",
+  appId: "1:382430830939:web:ded4104e01a7805c00fa7e"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const buses = {
+    "101": { lat: 17.3850, lng: 78.4867 },
+    "102": { lat: 17.3950, lng: 78.4967 },
+    "103": { lat: 17.3750, lng: 78.4767 }
+};
+
+const route = [
+    [17.3850, 78.4867],
+    [17.3870, 78.4880],
+    [17.3890, 78.4900],
+    [17.3920, 78.4930],
+    [17.3950, 78.4967]
+];
+
+function trackBus() {
+    const busNumber = document.getElementById("busNumber").value.trim();
+    const error = document.getElementById("error");
+
+    if (!busNumber) {
+        error.textContent = "Please enter a bus number";
+        return;
+    }
+
+    if (!buses[busNumber]) {
+        error.textContent = "Bus not found (try 101, 102, 103)";
+        return;
+    }
+
+    error.textContent = "";
+
+    document.getElementById("homeSection").style.display = "none";
+    document.getElementById("mapSection").style.display = "block";
+
+    const bus = buses[busNumber];
+
+    map = L.map('map').setView([bus.lat, bus.lng], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    const polyline = L.polyline(route, {
+        color: 'blue',
+        weight: 5
+    }).addTo(map);
+
+    map.fitBounds(polyline.getBounds());
+
+    marker = L.marker([bus.lat, bus.lng]).addTo(map)
+        .bindPopup("Bus " + busNumber)
+        .openPopup();
+
+    const busRef = db.ref("buses/" + busNumber);
+
+    busRef.on("value", (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
+
+        marker.setLatLng([data.lat, data.lng]);
+        map.panTo([data.lat, data.lng]);
+    });
+}
+
+/* ✅ NEW FUNCTION (no logic change to tracking) */
+function goBack() {
+    document.getElementById("homeSection").style.display = "flex";
+    document.getElementById("mapSection").style.display = "none";
+    document.getElementById("busNumber").value = "";
+
+    if (map) {
+        map.remove();
+        map = null;
+    }
+}
+
+</script>
+
+</body>
+</html>
